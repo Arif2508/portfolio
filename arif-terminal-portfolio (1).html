@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arif Dudekula | Penetration Tester</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #39ff14;
+    --green-dim: #28cc0f;
+    --green-faint: rgba(57,255,20,0.08);
+    --green-glow: rgba(57,255,20,0.45);
+    --cyan: #00e5ff;
+    --red: #ff3355;
+    --yellow: #ffe600;
+    --bg: #010a01;
+    --bg2: #020f02;
+    --surface: rgba(57,255,20,0.05);
+    --border: rgba(57,255,20,0.22);
+    --mono: 'Share Tech Mono', monospace;
+    --orb: 'Orbitron', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--green);
+    font-family: var(--mono);
+    overflow: hidden;
+    cursor: default;
+  }
+
+  #matrix-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0.07;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #scanlines {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.12) 2px,
+      rgba(0,0,0,0.12) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  #vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+    z-index: 998;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ── Header ── */
+  #header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(2,12,6,0.95);
+    backdrop-filter: blur(4px);
+  }
+
+  #header-logo {
+    font-family: var(--orb);
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--green);
+    letter-spacing: 3px;
+    text-shadow: 0 0 18px var(--green-glow);
+    animation: flicker 8s infinite;
+  }
+
+  #header-status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--green-dim);
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: blink 2s infinite;
+    margin-right: 5px;
+  }
+
+  .status-dot.red   { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+  .status-dot.yellow{ background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+
+  #header-time {
+    font-family: var(--orb);
+    font-size: 12px;
+    color: var(--cyan);
+    letter-spacing: 1px;
+  }
+
+  /* ── Terminal full-width ── */
+  #terminal-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgba(2,12,6,0.6);
+  }
+
+  /* Tab bar */
+  #tabs {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: rgba(2,8,4,0.9);
+    flex-shrink: 0;
+    padding: 0 20px;
+  }
+
+  .tab {
+    padding: 8px 20px;
+    font-size: 12px;
+    cursor: default;
+    color: var(--green-dim);
+    border-bottom: 2px solid transparent;
+    letter-spacing: 1px;
+  }
+
+  .tab.active {
+    color: var(--green);
+    border-bottom-color: var(--green);
+    text-shadow: 0 0 8px var(--green-glow);
+  }
+
+  /* Output */
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 36px 10px;
+    font-size: 13.5px;
+    line-height: 1.75;
+  }
+
+  #output::-webkit-scrollbar { width: 4px; }
+  #output::-webkit-scrollbar-track { background: transparent; }
+  #output::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.25); border-radius: 2px; }
+
+  .line { margin-bottom: 2px; }
+  .line.cmd-line { color: var(--green); }
+  .line.cmd-line::before { content: 'arif@sec:~$ '; color: var(--cyan); }
+  .line.out  { color: var(--green-dim); }
+  .line.out.hi { color: var(--green); }
+  .line.err  { color: var(--red); }
+  .line.warn { color: var(--yellow); }
+  .line.info { color: var(--cyan); }
+  .line.blank{ height: 8px; }
+
+  .ascii-art {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--green);
+    text-shadow: 0 0 8px var(--green-glow);
+    white-space: pre;
+    margin-bottom: 4px;
+  }
+
+  .section-header {
+    color: var(--cyan);
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(0,229,255,0.2);
+    margin: 4px 0 10px;
+    text-transform: uppercase;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 11px;
+    color: var(--green);
+    margin: 2px 4px 2px 0;
+    background: var(--green-faint);
+  }
+  .tag.red    { border-color: rgba(255,51,85,0.4);   color: var(--red);    background: rgba(255,51,85,0.06); }
+  .tag.cyan   { border-color: rgba(0,229,255,0.3);   color: var(--cyan);   background: rgba(0,229,255,0.05); }
+  .tag.yellow { border-color: rgba(255,204,0,0.3);   color: var(--yellow); background: rgba(255,204,0,0.05); }
+
+  /* Progress bars */
+  .progress-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0;
+  }
+  .progress-label {
+    width: 200px;
+    font-size: 12px;
+    color: var(--green-dim);
+    flex-shrink: 0;
+  }
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 1px;
+    overflow: hidden;
+    max-width: 520px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green-glow);
+    border-radius: 1px;
+    width: 0;
+    transition: width 0.9s ease;
+  }
+  .progress-val {
+    font-size: 11px;
+    color: var(--green);
+    width: 32px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Cards */
+  .project-card {
+    border: 1px solid var(--border);
+    padding: 12px 18px;
+    margin: 8px 0;
+    background: var(--green-faint);
+    border-radius: 2px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .project-card:hover {
+    border-color: var(--green);
+    background: rgba(0,255,136,0.09);
+  }
+  .project-title {
+    color: var(--green);
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .project-title .badge {
+    font-size: 10px;
+    padding: 1px 8px;
+    border: 1px solid var(--red);
+    color: var(--red);
+    letter-spacing: 1px;
+    border-radius: 2px;
+  }
+  .project-title .badge.green {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .project-title .badge.cyan {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .project-desc {
+    font-size: 12px;
+    color: var(--green-dim);
+    margin-bottom: 8px;
+    line-height: 1.65;
+  }
+
+  /* Social grid */
+  .social-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    max-width: 640px;
+  }
+  .social-item {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--green-faint);
+  }
+  .social-item:hover {
+    border-color: var(--green);
+    background: rgba(0,255,136,0.1);
+  }
+  .social-platform { font-size: 12px; color: var(--green); }
+  .social-handle   { font-size: 11px; color: var(--green-dim); }
+
+  /* Cert item */
+  .cert-item {
+    border-left: 2px solid var(--green);
+    padding: 8px 14px;
+    margin: 6px 0;
+    background: var(--green-faint);
+  }
+  .cert-name { color: var(--green); font-size: 13px; }
+  .cert-org  { color: var(--cyan);  font-size: 11px; margin-top: 2px; }
+
+  /* ── Input row ── */
+  #input-row {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 10px 36px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(2,8,4,0.95);
+    gap: 8px;
+  }
+
+  #prompt-label {
+    color: var(--cyan);
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    caret-color: var(--green);
+  }
+  #cmd-input::placeholder { color: rgba(0,255,136,0.28); }
+
+  #cursor-blink {
+    width: 9px; height: 16px;
+    background: var(--green);
+    animation: blink 1s infinite;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px var(--green-glow);
+  }
+
+  /* Suggestion chip */
+  .suggestion-chip {
+    display: inline-block;
+    padding: 3px 14px;
+    border: 1px solid rgba(0,229,255,0.4);
+    border-radius: 2px;
+    color: var(--cyan);
+    font-size: 12px;
+    cursor: pointer;
+    background: rgba(0,229,255,0.05);
+    transition: all 0.2s;
+    margin: 2px 6px 2px 0;
+    font-family: var(--mono);
+    letter-spacing: 0.5px;
+  }
+  .suggestion-chip:hover {
+    background: rgba(0,229,255,0.12);
+    border-color: var(--cyan);
+    box-shadow: 0 0 8px rgba(0,229,255,0.2);
+  }
+
+  /* Corner decorations */
+  .corner-dec {
+    position: fixed;
+    width: 40px; height: 40px;
+    z-index: 2;
+    opacity: 0.45;
+  }
+  .corner-dec.tl { top: 52px; left: 0; border-top: 1px solid var(--green); border-left: 1px solid var(--green); }
+  .corner-dec.tr { top: 52px; right: 0; border-top: 1px solid var(--green); border-right: 1px solid var(--green); }
+  .corner-dec.bl { bottom: 0; left: 0; border-bottom: 1px solid var(--green); border-left: 1px solid var(--green); }
+  .corner-dec.br { bottom: 0; right: 0; border-bottom: 1px solid var(--green); border-right: 1px solid var(--green); }
+
+  /* Animations */
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.5; }
+    99% { opacity: 1; }
+  }
+  @keyframes blink {
+    0%, 49%  { opacity: 1; }
+    50%, 100%{ opacity: 0; }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-in { animation: fadeIn 0.22s ease forwards; }
+
+  /* Boot screen */
+  #boot-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    color: var(--green);
+  }
+  #boot-logo {
+    font-family: var(--orb);
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    color: var(--green);
+    text-shadow: 0 0 30px var(--green-glow), 0 0 60px rgba(0,255,136,0.15);
+    margin-bottom: 6px;
+  }
+  #boot-sub {
+    font-size: 12px;
+    color: var(--green-dim);
+    letter-spacing: 3px;
+    margin-bottom: 24px;
+  }
+  #boot-bar-wrap {
+    width: 360px;
+    height: 4px;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.2);
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  #boot-bar {
+    height: 100%;
+    background: var(--green);
+    width: 0;
+    box-shadow: 0 0 10px var(--green);
+    transition: width 0.05s linear;
+  }
+  #boot-log {
+    font-size: 11px;
+    color: var(--green-dim);
+    height: 130px;
+    overflow: hidden;
+    text-align: left;
+    width: 420px;
+  }
+  #boot-log .blog { margin: 2px 0; }
+  #boot-log .ok   { color: var(--green); }
+  #boot-log .fail { color: var(--red); }
+  #boot-log .warn { color: var(--yellow); }
+
+  * { scrollbar-width: thin; scrollbar-color: rgba(0,255,136,0.2) transparent; }
+</style>
+</head>
+<body>
+
+<!-- Boot Screen -->
+<div id="boot-screen">
+  <div id="boot-logo">ARIF</div>
+  <div id="boot-sub">PENETRATION TESTER — SECURITY TERMINAL v1.0</div>
+  <div id="boot-bar-wrap"><div id="boot-bar"></div></div>
+  <div id="boot-log"></div>
+</div>
+
+<!-- Matrix rain -->
+<canvas id="matrix-canvas"></canvas>
+<div id="scanlines"></div>
+<div id="vignette"></div>
+
+<!-- Corner decorations -->
+<div class="corner-dec tl"></div>
+<div class="corner-dec tr"></div>
+<div class="corner-dec bl"></div>
+<div class="corner-dec br"></div>
+
+<!-- Main App -->
+<div id="app" style="opacity:0;transition:opacity 0.5s;">
+
+  <!-- Header -->
+  <div id="header">
+    <div id="header-logo">[ ARIF DUDEKULA ]</div>
+    <div id="header-status">
+      <span><span class="status-dot"></span>SYSTEM ONLINE</span>
+      <span><span class="status-dot yellow"></span>FIREWALL ACTIVE</span>
+      <span><span class="status-dot red"></span>INTRUSION DETECTION</span>
+    </div>
+    <div id="header-time">--:--:--</div>
+  </div>
+
+  <!-- Terminal (no sidebar) -->
+  <div id="terminal-wrap">
+    <div id="tabs">
+      <div class="tab active">terminal_1</div>
+      <div class="tab" style="opacity:0.45;">portfolio.sh</div>
+      <div class="tab" style="opacity:0.45;">pentest.log</div>
+    </div>
+    <div id="output"></div>
+    <div id="input-row">
+      <span id="prompt-label">arif@sec:~$</span>
+      <input id="cmd-input" type="text" autocomplete="off" spellcheck="false" placeholder="type a command...">
+      <div id="cursor-blink"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Matrix Rain ──
+const mcanvas = document.getElementById('matrix-canvas');
+const mctx = mcanvas.getContext('2d');
+let mCols, mDrops;
+function initMatrix() {
+  mcanvas.width  = window.innerWidth;
+  mcanvas.height = window.innerHeight;
+  mCols = Math.floor(mcanvas.width / 18);
+  mDrops = Array(mCols).fill(1);
+}
+function drawMatrix() {
+  mctx.fillStyle = 'rgba(1,10,1,0.05)';
+  mctx.fillRect(0, 0, mcanvas.width, mcanvas.height);
+  mctx.fillStyle = '#39ff14';
+  mctx.font = '14px Share Tech Mono, monospace';
+  const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ';
+  mDrops.forEach((y, i) => {
+    const ch = chars[Math.floor(Math.random() * chars.length)];
+    mctx.fillText(ch, i * 18, y * 18);
+    if (y * 18 > mcanvas.height && Math.random() > 0.975) mDrops[i] = 0;
+    mDrops[i]++;
+  });
+}
+initMatrix();
+window.addEventListener('resize', initMatrix);
+setInterval(drawMatrix, 60);
+
+// ── Clock ──
+function updateClock() {
+  const t = new Date().toTimeString().split(' ')[0];
+  document.getElementById('header-time').textContent = t;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Boot sequence ──
+const bootLogs = [
+  ['ok',   '[  0.001] Initializing kernel modules...'],
+  ['ok',   '[  0.014] Loading network interfaces... eth0 UP'],
+  ['ok',   '[  0.029] Mounting encrypted volumes... /dev/sda1 OK'],
+  ['warn', '[  0.043] VPN tunnel: establishing secure channel...'],
+  ['ok',   '[  0.058] VPN connected — 256-bit AES encryption active'],
+  ['ok',   '[  0.074] Firewall rules loaded (iptables v1.8.9)'],
+  ['ok',   '[  0.089] Intrusion detection system: ENABLED'],
+  ['warn', '[  0.103] Checking for rootkits... 0 threats found'],
+  ['ok',   '[  0.119] Loading portfolio modules: about, skills, certs, experience...'],
+  ['ok',   '[  0.137] Certifications verified: EWPTX, eJPT, ICCA, CAP, CNSP'],
+  ['ok',   '[  0.152] All systems nominal. Welcome, operator.'],
+];
+let bootIdx = 0;
+const bootLog = document.getElementById('boot-log');
+const bootBar = document.getElementById('boot-bar');
+function bootStep() {
+  if (bootIdx < bootLogs.length) {
+    const [cls, msg] = bootLogs[bootIdx];
+    const el = document.createElement('div');
+    el.className = `blog ${cls}`;
+    el.textContent = msg;
+    bootLog.appendChild(el);
+    bootLog.scrollTop = 9999;
+    bootBar.style.width = ((bootIdx + 1) / bootLogs.length * 100) + '%';
+    bootIdx++;
+    setTimeout(bootStep, 90 + Math.random() * 80);
+  } else {
+    setTimeout(() => {
+      const bs = document.getElementById('boot-screen');
+      bs.style.transition = 'opacity 0.6s';
+      bs.style.opacity = '0';
+      setTimeout(() => {
+        bs.style.display = 'none';
+        document.getElementById('app').style.opacity = '1';
+        document.getElementById('cmd-input').focus();
+        printWelcome();
+      }, 600);
+    }, 300);
+  }
+}
+bootStep();
+
+// ── Terminal helpers ──
+const output = document.getElementById('output');
+
+function addLine(text, cls = 'out', delay = 0) {
+  return new Promise(res => {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = `line ${cls} animate-in`;
+      el.innerHTML = text;
+      output.appendChild(el);
+      output.scrollTop = output.scrollHeight;
+      res();
+    }, delay);
+  });
+}
+function addBlank(delay = 0) { return addLine('', 'blank', delay); }
+function addHTML(html, delay = 0) {
+  return new Promise(res => {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'animate-in';
+      el.innerHTML = html;
+      output.appendChild(el);
+      output.scrollTop = output.scrollHeight;
+      res();
+    }, delay);
+  });
+}
+
+// ── Welcome screen ──
+async function printWelcome() {
+  const ascii = [
+    ' █████╗  ██████╗  ██╗ ███████╗',
+    '██╔══██╗ ██╔══██╗ ██║ ██╔════╝',
+    '███████║ ██████╔╝ ██║ █████╗  ',
+    '██╔══██║ ██╔══██╗ ██║ ██╔══╝  ',
+    '██║  ██║ ██║  ██║ ██║ ██║     ',
+    '╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝ ╚═╝     ',
+  ].join('\n');
+
+  output.innerHTML = '';
+  await addHTML(`<div class="ascii-art">${ascii}</div>`, 0);
+  await addLine('─────────────────────────────────────────────────────────────────', 'out', 40);
+  await addLine('  Welcome to <span style="color:var(--green)">ARIF DUDEKULA\'S</span> Security Terminal', 'out', 80);
+  await addLine('  Penetration Tester &nbsp;|&nbsp; Web &amp; Mobile AppSec &nbsp;|&nbsp; Bug Hunter', 'out', 120);
+  await addLine('─────────────────────────────────────────────────────────────────', 'out', 160);
+  await addBlank(200);
+  await addLine(
+    '  <span style="color:var(--yellow)">[hint]</span> Type <span style="color:var(--cyan)">help</span> or <span style="color:var(--cyan)">ai</span> to chat with Arif\'s AI. &nbsp;Tab=autocomplete &nbsp;|&nbsp; ↑↓=history.',
+    'out', 240
+  );
+  await addBlank(280);
+  await addHTML(`<div style="padding:0 0 6px 0;">
+    <span style="font-size:11px;color:var(--green-dim);margin-right:8px;">quick commands →</span>
+    <span class="suggestion-chip" onclick="runCmd('help')">help</span>
+    <span class="suggestion-chip" onclick="runCmd('about')">about</span>
+    <span class="suggestion-chip" onclick="runCmd('skills')">skills</span>
+    <span class="suggestion-chip" onclick="runCmd('experience')">experience</span>
+    <span class="suggestion-chip" onclick="runCmd('certifications')">certifications</span>
+    <span class="suggestion-chip" onclick="runCmd('contact')">contact</span>
+    <span class="suggestion-chip" onclick="runCmd('ai')">ai chat</span>
+  </div>`, 320);
+  await addBlank(360);
+}
+
+// ── Commands ──
+
+async function cmdHelp() {
+  await addLine('<span class="section-header">// AVAILABLE COMMANDS</span>', 'out');
+  await addBlank();
+  const cmds = [
+    ['about',          'Who is Arif — background & objective'],
+    ['skills',         'Core competencies & tool proficiency'],
+    ['experience',     'Work history & roles'],
+    ['certifications', 'Security certifications earned'],
+    ['achievements',   'Hall of Fame & awards'],
+    ['education',      'Academic qualifications'],
+    ['contact',        'Email, LinkedIn & phone'],
+    ['ai',             'Chat with Arif\'s AI assistant (ask anything about Arif)'],
+    ['whoami',         'Current user identity'],
+    ['ls',             'List portfolio directories'],
+    ['hack',           'Simulated recon demo (safe)'],
+    ['matrix',         'Toggle matrix rain intensity'],
+    ['clear',          'Clear the terminal'],
+  ];
+  for (const [cmd, desc] of cmds) {
+    await addLine(
+      `  <span style="color:var(--cyan);display:inline-block;width:180px">${cmd.padEnd(22)}</span><span style="color:var(--green-dim)">${desc}</span>`,
+      'out'
+    );
+  }
+  await addBlank();
+  await addLine('  <span style="color:var(--yellow)">[tip]</span> Click any chip above or type a command and press <span style="color:var(--cyan)">Enter</span>.', 'out');
+}
+
+async function cmdAbout() {
+  await addLine('<span class="section-header">// ABOUT — ARIF DUDEKULA</span>', 'out');
+  await addBlank();
+  await addLine('  <span style="color:var(--green)">Name        :</span> Arif Dudekula', 'out');
+  await addLine('  <span style="color:var(--green)">Role        :</span> Penetration Tester', 'out');
+  await addLine('  <span style="color:var(--green)">Location    :</span> Andhra Pradesh, India', 'out');
+  await addLine('  <span style="color:var(--green)">Email       :</span> <span style="color:var(--cyan)">arifsecguy@gmail.com</span>', 'out');
+  await addLine('  <span style="color:var(--green)">Phone       :</span> +91 8008038656', 'out');
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// CAREER OBJECTIVE</span>', 'out');
+  await addLine('  To continue my career with an organization that will utilize my skills.', 'out');
+  await addLine('  My goal is to become associated with a company where I can utilize my', 'out');
+  await addLine('  skills and gain further experience while enhancing the company\'s', 'out');
+  await addLine('  productivity and reputation.', 'out');
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// PROFILE SUMMARY</span>', 'out');
+  await addLine('  • Conducted in-depth security assessments and penetration tests on web', 'out');
+  await addLine('    applications, networks, and mobile platforms.', 'out');
+  await addLine('  • Proficient in both static and dynamic testing for Android and iOS apps.', 'out');
+  await addLine('  • Certified in EWPTX, eJPT, CAP, CNSP — committed to continuous learning.', 'out');
+  await addLine('  • Skilled in vulnerability management and delivering actionable remediation.', 'out');
+  await addBlank();
+  await addHTML(`<div style="padding:2px 0 4px 0;">
+    <span class="tag cyan">Web App Pentesting</span>
+    <span class="tag">Mobile Pentesting</span>
+    <span class="tag cyan">Network Security</span>
+    <span class="tag red">Exploit Development</span>
+    <span class="tag yellow">Bug Bounty</span>
+    <span class="tag">API Security</span>
+    <span class="tag">CTF Player</span>
+  </div>`);
+}
+
+async function cmdSkills() {
+  await addLine('<span class="section-header">// CORE COMPETENCIES & SKILLS</span>', 'out');
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// PENETRATION TESTING SKILLS</span>', 'out');
+  await addBlank();
+  const skills = [
+    ['Web Application Penetration Testing', 92],
+    ['Mobile Penetration Testing (Android/iOS)', 85],
+    ['Network Security & VAPT',               88],
+    ['API Security Testing',                  84],
+    ['Python Programming',                    80],
+    ['CI/CD & DevSecOps',                     72],
+    ['Kubernetes & Docker',                   74],
+    ['Terraform & Cloud Security',            68],
+  ];
+  for (const [name, val] of skills) {
+    await addHTML(`<div class="progress-bar-wrap">
+      <div class="progress-label">${name}</div>
+      <div class="progress-track"><div class="progress-fill" data-val="${val}" style="width:0%"></div></div>
+      <div class="progress-val">${val}%</div>
+    </div>`);
+  }
+  setTimeout(() => {
+    document.querySelectorAll('.progress-fill').forEach(el => {
+      el.style.width = el.dataset.val + '%';
+    });
+  }, 100);
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// TOOLS & FRAMEWORKS</span>', 'out');
+  await addHTML(`<div style="padding:6px 0 4px;">
+    <span class="tag cyan">Burp Suite</span>
+    <span class="tag">Metasploit</span>
+    <span class="tag">NMAP</span>
+    <span class="tag">Nessus</span>
+    <span class="tag">Nikto</span>
+    <span class="tag cyan">Kali Linux</span>
+    <span class="tag">MobSF</span>
+    <span class="tag yellow">APK Tool</span>
+    <span class="tag red">Frida &amp; Objection</span>
+    <span class="tag">JADX</span>
+    <span class="tag">ADB</span>
+    <span class="tag cyan">Wappalyzer</span>
+    <span class="tag">Docker</span>
+    <span class="tag yellow">Terraform</span>
+  </div>`);
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// VULNERABILITY CLASSES</span>', 'out');
+  await addHTML(`<div style="padding:4px 0;">
+    <span class="tag red">SQLi</span>
+    <span class="tag red">XSS</span>
+    <span class="tag cyan">SSRF</span>
+    <span class="tag yellow">SSTI</span>
+    <span class="tag red">LFI</span>
+    <span class="tag">IDOR</span>
+    <span class="tag cyan">CSRF</span>
+    <span class="tag yellow">Privilege Escalation</span>
+    <span class="tag">Broken Auth</span>
+  </div>`);
+}
+
+async function cmdExperience() {
+  await addLine('<span class="section-header">// WORK EXPERIENCE</span>', 'out');
+  await addBlank();
+
+  await addHTML(`<div class="project-card">
+    <div class="project-title">
+      Consultant – Security Engineer Intern
+      <span class="badge cyan">PRESENT</span>
+    </div>
+    <div class="project-desc">
+      <span style="color:var(--green)">Digital Age Strategies Pvt Ltd</span>
+      &nbsp;&nbsp;<span style="color:var(--yellow)">01/2026 – Present</span>
+    </div>
+    <div class="project-desc">
+      • Conducted VAPT on web applications, mobile apps, APIs, and network infrastructure<br>
+        to identify security vulnerabilities.<br>
+      • Analyzed and reported vulnerabilities with risk ratings and recommended remediation
+        to improve overall security posture.
+    </div>
+    <div>
+      <span class="tag">VAPT</span>
+      <span class="tag cyan">Mobile Apps</span>
+      <span class="tag">APIs</span>
+      <span class="tag yellow">Network Infra</span>
+    </div>
+  </div>`);
+
+  await addHTML(`<div class="project-card">
+    <div class="project-title">
+      Penetration Tester
+      <span class="badge green">CONTRACT</span>
+    </div>
+    <div class="project-desc">
+      <span style="color:var(--green)">Hacktify Cyber Security</span>
+      &nbsp;&nbsp;<span style="color:var(--yellow)">07/2024 – 08/2024</span>
+    </div>
+    <div class="project-desc">
+      • Conducted security assessments on web applications and APIs, uncovering vulnerabilities<br>
+        including SQLi, LFI, SSRF, SSTI, XSS, Privilege Escalation, IDOR, CSRF, and more.<br>
+      • Engaged in Capture The Flag (CTF) challenges, applying practical exploitation techniques<br>
+        and further developing ethical hacking proficiencies.
+    </div>
+    <div>
+      <span class="tag red">SQLi</span>
+      <span class="tag red">XSS</span>
+      <span class="tag cyan">SSRF</span>
+      <span class="tag yellow">IDOR</span>
+      <span class="tag">CTF</span>
+      <span class="tag cyan">API Testing</span>
+    </div>
+  </div>`);
+}
+
+async function cmdCertifications() {
+  await addLine('<span class="section-header">// CERTIFICATIONS</span>', 'out');
+  await addBlank();
+  const certs = [
+    { badge: 'EWPTX',  name: 'Web Application Penetration Tester eXtreme', org: 'INE Security', color: 'var(--red)' },
+    { badge: 'eJPT',   name: 'Junior Penetration Tester',                   org: 'INE Security', color: 'var(--yellow)' },
+    { badge: 'ICCA',   name: 'Certified Cloud Associate',                    org: 'INE Security', color: 'var(--cyan)' },
+    { badge: 'CAP',    name: 'Certified Appsec Practitioner',                org: 'The SecOps Group', color: 'var(--green)' },
+    { badge: 'CNSP',   name: 'Certified Network Security Practitioner',      org: 'The SecOps Group', color: 'var(--green)' },
+    { badge: 'ELITE',  name: 'Cyber Threya Elite Mastery Training',          org: 'Cyber Threya',     color: 'var(--yellow)' },
+    { badge: 'PY',     name: 'Python Certification',                          org: 'HackerRank',       color: 'var(--green-dim)' },
+  ];
+  for (const c of certs) {
+    await addHTML(`<div class="cert-item">
+      <div class="cert-name">
+        <span style="color:${c.color};margin-right:10px;">[${c.badge}]</span>${c.name}
+      </div>
+      <div class="cert-org">Issued by: ${c.org}</div>
+    </div>`);
+  }
+}
+
+async function cmdAchievements() {
+  await addLine('<span class="section-header">// ACHIEVEMENTS & HALL OF FAME</span>', 'out');
+  await addBlank();
+  const hof = [
+    { org: 'BBC',      desc: 'Responsible disclosure — security vulnerability reported to BBC.' },
+    { org: 'Inflectra', desc: 'Responsible disclosure — vulnerability reported to Inflectra.' },
+  ];
+  await addLine('  <span style="color:var(--cyan)">// HALL OF FAME</span>', 'out');
+  await addBlank();
+  for (const h of hof) {
+    await addHTML(`<div class="project-card">
+      <div class="project-title" style="color:var(--yellow)">🏆 HALL OF FAME — ${h.org}</div>
+      <div class="project-desc">${h.desc}</div>
+    </div>`);
+  }
+  await addBlank();
+  await addLine('  <span style="color:var(--cyan)">// ACADEMIC PRIZES</span>', 'out');
+  await addBlank();
+  await addHTML(`<div class="project-card">
+    <div class="project-title" style="color:var(--green)">🥇 Project Expo — 1st Prize</div>
+    <div class="project-desc">Awarded 1st place at the Project Expo, CBIT (Chaitanya Bharathi Institute of Technology).</div>
+  </div>`);
+}
+
+async function cmdEducation() {
+  await addLine('<span class="section-header">// ACADEMIC QUALIFICATIONS</span>', 'out');
+  await addBlank();
+  const edu = [
+    {
+      degree: 'B.Tech — Artificial Intelligence & Computer Science',
+      inst:   'CBIT, Proddatur, Andhra Pradesh',
+      period: '2022 – 2026',
+      color:  'var(--green)',
+    },
+    {
+      degree: 'Board of Intermediate Education',
+      inst:   'Sri Chaitanya Junior College, Vijayawada, Andhra Pradesh',
+      period: '2020 – 2022',
+      color:  'var(--cyan)',
+    },
+    {
+      degree: 'Secondary School Education (SSC)',
+      inst:   'Vaagdevi High School, Yadiki, Andhra Pradesh',
+      period: '2019 – 2020',
+      color:  'var(--green-dim)',
+    },
+  ];
+  for (const e of edu) {
+    await addHTML(`<div class="cert-item" style="border-left-color:${e.color}">
+      <div class="cert-name" style="color:${e.color}">${e.degree}</div>
+      <div class="cert-org">${e.inst} &nbsp;|&nbsp; <span style="color:var(--yellow)">${e.period}</span></div>
+    </div>`);
+  }
+}
+
+async function cmdContact() {
+  await addLine('<span class="section-header">// CONTACT</span>', 'out');
+  await addBlank();
+  await addLine('  <span style="color:var(--green)">Email    :</span> <span style="color:var(--cyan)">arifsecguy@gmail.com</span>', 'out');
+  await addLine('  <span style="color:var(--green)">Phone    :</span> +91 8008038656', 'out');
+  await addLine('  <span style="color:var(--green)">LinkedIn :</span> <span style="color:var(--cyan)">linkedin.com/in/arif-dudekula</span>', 'out');
+  await addLine('  <span style="color:var(--green)">Location :</span> Andhra Pradesh, India', 'out');
+  await addBlank();
+  await addHTML(`<div class="social-grid">
+    <div class="social-item" onclick="window.open('mailto:arifsecguy@gmail.com')">
+      <span style="font-size:18px;color:var(--green)">✉</span>
+      <div><div class="social-platform">Email</div><div class="social-handle">arifsecguy@gmail.com</div></div>
+    </div>
+    <div class="social-item" onclick="window.open('https://linkedin.com','_blank')">
+      <span style="font-size:18px;color:var(--cyan)">◈</span>
+      <div><div class="social-platform">LinkedIn</div><div class="social-handle">arif-dudekula</div></div>
+    </div>
+    <div class="social-item">
+      <span style="font-size:18px;color:var(--yellow)">☎</span>
+      <div><div class="social-platform">Phone</div><div class="social-handle">+91 8008038656</div></div>
+    </div>
+    <div class="social-item" onclick="window.open('https://hackerone.com','_blank')">
+      <span style="font-size:18px;color:var(--red)">◈</span>
+      <div><div class="social-platform">HackerOne</div><div class="social-handle">@arifsecguy</div></div>
+    </div>
+  </div>`);
+  await addBlank();
+  await addLine('  <span style="color:var(--yellow)">[!]</span> Open to full-time roles & responsible disclosure collaborations.', 'out');
+}
+
+async function cmdWhoami() {
+  await addLine('arif — uid=1337(pentester) gid=1337(secops) groups=1337(secops),0(root)', 'out');
+  await addLine('Certified: EWPTX | eJPT | ICCA | CAP | CNSP', 'out');
+  await addLine('Hall of Fame: BBC, Inflectra', 'out');
+}
+
+async function cmdLs() {
+  const items = ['about/', 'skills/', 'experience/', 'certifications/', 'achievements/', 'education/', 'contact/', 'tools/', 'README.md'];
+  const colored = items.map(i =>
+    i.endsWith('/')
+      ? `<span style="color:var(--cyan)">${i}</span>`
+      : `<span style="color:var(--green)">${i}</span>`
+  ).join('  ');
+  await addLine(colored, 'out');
+}
+
+async function cmdClear() {
+  output.innerHTML = '';
+}
+
+async function cmdHack() {
+  await addLine('Initiating simulated recon payload...', 'warn');
+  const steps = [
+    '[>] Scanning target ports via NMAP...',
+    '[>] Port 22 open — SSH (OpenSSH 8.9)',
+    '[>] Port 80 open — HTTP (nginx 1.22)',
+    '[>] Port 443 open — HTTPS (TLS 1.3)',
+    '[>] Running Nikto web scan...',
+    '[>] Checking for common CVEs via Nessus...',
+    '[>] No critical unpatched CVEs found.',
+    '[>] Running Burp Suite passive scan...',
+    '[!] Potential IDOR on /api/v1/user/{id} — manual review recommended.',
+    '[✓] Simulation complete. Stay ethical. Hack responsibly.',
+  ];
+  for (let i = 0; i < steps.length; i++) {
+    const isFinal = i === steps.length - 1;
+    const isWarn  = steps[i].startsWith('[!]');
+    await addLine(steps[i], isFinal ? 'info' : isWarn ? 'warn' : 'out', i * 220);
+  }
+}
+
+async function cmdMatrix() {
+  await addLine('Boosting matrix visibility for 4 seconds...', 'warn');
+  mcanvas.style.opacity = '0.28';
+  setTimeout(() => { mcanvas.style.opacity = '0.07'; }, 4000);
+}
+
+// ── AI Chatbot — Human-style Conversational Engine ──
+
+const ARIF = {
+  name: 'Arif Dudekula',
+  role: 'Penetration Tester',
+  location: 'Andhra Pradesh, India',
+  email: 'arifsecguy@gmail.com',
+  phone: '+91 8008038656',
+  linkedin: 'linkedin.com/in/arif-dudekula',
+};
+
+// Intent patterns → multi-line human responses
+const AI_INTENTS = [
+
+  // Greetings
+  {
+    test: q => /^(hi|hello|hey|greet|sup|yo|hiya|howdy)/.test(q),
+    respond: () => [
+      `Hey there! 👋 Great to see you here.`,
+      `I'm Arif's personal AI — I know everything about him.`,
+      `You can ask me things like: "what is best in Arif?", "what are his skills?", "is he good at hacking?", "where does he work?" — anything!`,
+    ]
+  },
+
+  // Best things about Arif / strengths / highlights
+  {
+    test: q => /(best|strengths?|highlight|special|unique|stand.?out|greatest|top|impressive|awesome|amazing|wow|good about|about him|tell me about arif|summarize|overview|all about)/.test(q),
+    respond: () => [
+      `Great question! Here's what makes Arif truly stand out: 🌟`,
+      ``,
+      `💀 #1 — He's a certified killer in Web App Pentesting (92% proficiency). SQLi, XSS, SSRF, SSTI, IDOR — he finds them all.`,
+      `📱 #2 — Mobile security is his second home. Both Android & iOS, static and dynamic analysis using Frida, MobSF, JADX and Objection.`,
+      `🏆 #3 — Hall of Fame at BBC and Inflectra! He reported real-world vulnerabilities to global companies. That takes serious skill.`,
+      `🎓 #4 — Not just practical — he's stacked with certs: EWPTX, eJPT, ICCA, CAP, CNSP. These are real industry badges.`,
+      `🐍 #5 — He codes too! Python scripts, automation tools, CI/CD pipelines — he's a full-spectrum security engineer.`,
+      `🔬 #6 — He works at Digital Age Strategies as a Security Engineer Intern right now, doing VAPT on real systems.`,
+      `📚 #7 — Currently finishing his B.Tech in AI & Computer Science at CBIT, Proddatur.`,
+      ``,
+      `In short — Arif is a rare blend of technical hacker, certified professional, and ethical researcher. Highly hirable! 🚀`,
+    ]
+  },
+
+  // Skills
+  {
+    test: q => /(skill|can do|expertise|proficien|know|tool|competenc|capable|ability|what does he do)/.test(q),
+    respond: () => [
+      `Arif's skill set is seriously impressive. Here's the breakdown:`,
+      ``,
+      `🔴 Web App Pentesting .............. 92%  — his strongest domain`,
+      `🟠 Network Security & VAPT ......... 88%  — full network audits`,
+      `🟡 Mobile Pentesting (Android/iOS) . 85%  — both platforms covered`,
+      `🔵 API Security Testing ............ 84%  — REST & GraphQL`,
+      `🟢 Python Programming .............. 80%  — scripting & automation`,
+      `⚪ CI/CD & DevSecOps ............... 72%  — pipeline security`,
+      `⚪ Kubernetes & Docker ............. 74%  — container security`,
+      `⚪ Terraform & Cloud Security ...... 68%  — infrastructure review`,
+      ``,
+      `🧰 Tools he uses daily: Burp Suite, Metasploit, NMAP, Nessus, Nikto, Kali Linux, MobSF, APKTool, Frida, Objection, JADX, ADB, Docker, Terraform`,
+      ``,
+      `💥 Vulnerability classes he hunts: SQLi, XSS, SSRF, SSTI, LFI, IDOR, CSRF, Privilege Escalation, Broken Auth`,
+    ]
+  },
+
+  // Certifications
+  {
+    test: q => /(cert|certif|badge|qualification|license|ewptx|ejpt|icca|cap|cnsp)/.test(q),
+    respond: () => [
+      `Arif has stacked up some serious certifications! 🎓`,
+      ``,
+      `🔴 EWPTX  — Web Application Penetration Tester eXtreme (INE Security) — the hardest web hacking cert`,
+      `🟡 eJPT   — Junior Penetration Tester (INE Security) — hands-on lab based cert`,
+      `🔵 ICCA   — Certified Cloud Associate (INE Security)`,
+      `🟢 CAP    — Certified AppSec Practitioner (The SecOps Group)`,
+      `🟢 CNSP   — Certified Network Security Practitioner (The SecOps Group)`,
+      `⭐ ELITE  — Cyber Threya Elite Mastery Training (Cyber Threya)`,
+      `🐍 PY     — Python Certification (HackerRank)`,
+      ``,
+      `That's 7 certifications — covering web, mobile, network, cloud, and code. Pretty elite lineup! 💪`,
+    ]
+  },
+
+  // Experience / work
+  {
+    test: q => /(experience|work|job|company|intern|employ|career|role|position|where does he work|current|currently)/.test(q),
+    respond: () => [
+      `Arif's professional journey so far: 💼`,
+      ``,
+      `🏢 Current Role — Security Engineer Intern`,
+      `   Company: Digital Age Strategies Pvt Ltd`,
+      `   Duration: January 2026 – Present`,
+      `   What he does: VAPT on web apps, mobile apps, APIs, and network infrastructure.`,
+      `                 Reports vulnerabilities with risk ratings and remediation advice.`,
+      ``,
+      `🏢 Previous Role — Penetration Tester (Contract)`,
+      `   Company: Hacktify Cyber Security`,
+      `   Duration: July 2024 – August 2024`,
+      `   What he did: Uncovered SQLi, LFI, SSRF, SSTI, XSS, IDOR, CSRF, Privilege Escalation`,
+      `                on web apps & APIs. Also participated in CTF challenges.`,
+      ``,
+      `He's still building his career — but already has real-world security experience under his belt. 🚀`,
+    ]
+  },
+
+  // Achievements / Hall of Fame
+  {
+    test: q => /(achiev|award|prize|hall of fame|hof|bbc|inflectra|recognition|honor|expo|win|won)/.test(q),
+    respond: () => [
+      `Arif's achievements are genuinely impressive for someone still in college! 🏆`,
+      ``,
+      `🌍 Hall of Fame — BBC`,
+      `   Responsibly disclosed a real security vulnerability to the BBC.`,
+      `   Getting into BBC's Hall of Fame is a big deal — they're picky!`,
+      ``,
+      `🌍 Hall of Fame — Inflectra`,
+      `   Reported a vulnerability to Inflectra and earned recognition.`,
+      `   Two HoF entries = proof he's doing real bug bounty hunting.`,
+      ``,
+      `🥇 1st Prize — Project Expo at CBIT`,
+      `   Won first place at his college's Project Expo.`,
+      `   Shows he's not just a hacker — he's a builder too.`,
+      ``,
+      `Bottom line: Arif finds real bugs in real companies. That's elite territory. 🔥`,
+    ]
+  },
+
+  // Education
+  {
+    test: q => /(educat|degree|college|university|study|school|b\.?tech|graduate|academic)/.test(q),
+    respond: () => [
+      `Here's Arif's academic background: 📚`,
+      ``,
+      `🎓 B.Tech — Artificial Intelligence & Computer Science`,
+      `   CBIT (Chaitanya Bharathi Institute of Technology), Proddatur, Andhra Pradesh`,
+      `   2022 – 2026 | Currently in final year`,
+      ``,
+      `📘 Board of Intermediate Education`,
+      `   Sri Chaitanya Junior College, Vijayawada, Andhra Pradesh | 2020 – 2022`,
+      ``,
+      `📗 Secondary School Education (SSC)`,
+      `   Vaagdevi High School, Yadiki, Andhra Pradesh | 2019 – 2020`,
+      ``,
+      `AI + Cybersecurity combo from a young age — that explains the unique skill blend! 🧠`,
+    ]
+  },
+
+  // Contact / hire
+  {
+    test: q => /(contact|email|phone|reach|hire|connect|linkedin|available|open to work|work with)/.test(q),
+    respond: () => [
+      `Want to reach out to Arif? Here's how: 📬`,
+      ``,
+      `✉️  Email    : arifsecguy@gmail.com`,
+      `📞  Phone    : +91 8008038656`,
+      `🔗  LinkedIn : linkedin.com/in/arif-dudekula`,
+      `📍  Location : Andhra Pradesh, India`,
+      ``,
+      `He is OPEN to full-time roles, freelance engagements, and responsible disclosure collaborations.`,
+      `If you need a sharp penetration tester — don't hesitate, just email him. 🚀`,
+    ]
+  },
+
+  // Bug bounty
+  {
+    test: q => /(bug.?bounty|bounty|hackerone|bugcrowd|responsible disclosure|report|vuln.?report)/.test(q),
+    respond: () => [
+      `Bug Bounty is where Arif puts his skills to the real test! 🐛💰`,
+      ``,
+      `He actively participates in bug bounty programs and has earned:`,
+      `  → Hall of Fame at BBC — reported a verified vulnerability`,
+      `  → Hall of Fame at Inflectra — another responsible disclosure`,
+      ``,
+      `He hunts: XSS, SQLi, SSRF, SSTI, IDOR, LFI, CSRF, Privilege Escalation, Broken Auth`,
+      ``,
+      `Tools he uses in the field: Burp Suite, NMAP, Nikto, Nessus, and custom Python scripts`,
+      ``,
+      `For Arif, bug bounty isn't a hobby — it's proof-of-work. 🔥`,
+    ]
+  },
+
+  // Mobile
+  {
+    test: q => /(mobile|android|ios|apk|frida|objection|mobsf|jadx|adb|app security)/.test(q),
+    respond: () => [
+      `Arif is solid on mobile security — both Android and iOS. 📱`,
+      ``,
+      `What he does:`,
+      `  → Static Analysis: Decompiles APKs using APKTool & JADX, reviews source code for flaws`,
+      `  → Dynamic Analysis: Runtime manipulation with Frida & Objection`,
+      `  → Automated scanning: MobSF for both Android & iOS apps`,
+      `  → ADB for debugging and device interaction`,
+      ``,
+      `He's proficient at bypassing SSL pinning, root detection, and extracting sensitive data from apps.`,
+      `Mobile pentesting skill level: 85% — and growing fast! 🚀`,
+    ]
+  },
+
+  // Who is / intro
+  {
+    test: q => /(who is|who's|introduce|tell me about|describe arif|about arif|arif dudekula|what is arif)/.test(q),
+    respond: () => [
+      `Let me introduce you to Arif Dudekula! 👤`,
+      ``,
+      `Name     : Arif Dudekula`,
+      `Role     : Penetration Tester & Security Researcher`,
+      `Location : Andhra Pradesh, India`,
+      ``,
+      `Arif is a cybersecurity professional specialising in:`,
+      `  → Web Application Penetration Testing`,
+      `  → Mobile Security (Android & iOS)`,
+      `  → Network VAPT & API Security`,
+      `  → Bug Bounty Hunting`,
+      ``,
+      `He's certified (EWPTX, eJPT, ICCA, CAP, CNSP), experienced (real companies, real bugs),`,
+      `and recognized (BBC & Inflectra Hall of Fame). Still in his final year of B.Tech — but already playing at a professional level. 🏆`,
+    ]
+  },
+
+  // Help / what can you do
+  {
+    test: q => /(help|what can you|what do you know|commands|questions|ask you|tell me|guide)/.test(q),
+    respond: () => [
+      `I'm Arif's AI assistant — here's what you can ask me: 💡`,
+      ``,
+      `  → "What is best in Arif?"         — his top strengths & highlights`,
+      `  → "What are his skills?"           — full skill breakdown with %`,
+      `  → "What certifications does he have?" — all 7 certs explained`,
+      `  → "Where does he work?"            — current & past experience`,
+      `  → "Tell me about his achievements" — Hall of Fame, awards`,
+      `  → "What about mobile security?"    — Android/iOS expertise`,
+      `  → "Is he good at bug bounty?"      — bounty track record`,
+      `  → "How to contact him?"            — email, phone, LinkedIn`,
+      `  → "Who is Arif?"                   — full introduction`,
+      ``,
+      `Just ask naturally — I understand human language, not just keywords! 😊`,
+      `Type "exit ai" anytime to go back to the terminal.`,
+    ]
+  },
+
+];
+
+let aiMode = false;
+
+async function cmdAI() {
+  aiMode = true;
+  await addLine('<span class="section-header">// ARIF AI ASSISTANT — ONLINE</span>', 'out');
+  await addBlank();
+  await addLine('  <span style="color:#39ff14">■ ARIF-AI</span> <span style="color:var(--green-dim)">Hey! I\'m Arif\'s personal AI. I know everything about him.</span>', 'out');
+  await addLine('  <span style="color:var(--green-dim)">            Ask me anything — "what is best in Arif?", "his skills?", "certs?", "contact?" etc.</span>', 'out');
+  await addLine('  <span style="color:var(--yellow)">[tip]</span> Type <span style="color:var(--cyan)">exit ai</span> to go back to terminal mode.', 'out');
+  await addBlank();
+  document.getElementById('prompt-label').innerHTML = '<span style="color:#39ff14">arif-ai</span><span style="color:var(--cyan)">:~$</span>';
+}
+
+async function aiRespond(userInput) {
+  const q = userInput.toLowerCase().trim();
+
+  // Find matching intent
+  let lines = null;
+  for (const intent of AI_INTENTS) {
+    if (intent.test(q)) { lines = intent.respond(); break; }
+  }
+
+  // Fallback
+  if (!lines) {
+    lines = [
+      `Hmm, I'm not sure about that specific topic... 🤔`,
+      `But I can tell you about Arif's skills, certifications, experience, achievements, education, or contact info.`,
+      `Try asking: "what is best in Arif?" or "what are his certifications?" — I love those questions!`,
+      `Or type "help" to see all the things I can answer. 😊`,
+    ];
+  }
+
+  // Print each line with a small typing delay for human feel
+  for (let i = 0; i < lines.length; i++) {
+    const txt = lines[i];
+    const isBlank = txt === '';
+    if (isBlank) {
+      await addBlank(0);
+    } else {
+      await addLine(`  <span style="color:#39ff14">▸</span> <span style="color:var(--green-dim)">${txt}</span>`, 'out', i * 55);
+    }
+  }
+}
+
+// ── Command registry ──
+const CMDS = {
+  help:           cmdHelp,
+  about:          cmdAbout,
+  skills:         cmdSkills,
+  experience:     cmdExperience,
+  certifications: cmdCertifications,
+  certs:          cmdCertifications,
+  achievements:   cmdAchievements,
+  education:      cmdEducation,
+  contact:        cmdContact,
+  ai:             cmdAI,
+  whoami:         cmdWhoami,
+  ls:             cmdLs,
+  clear:          cmdClear,
+  hack:           cmdHack,
+  matrix:         cmdMatrix,
+  pwd:   async () => { await addLine('/home/arif/portfolio', 'out'); },
+  date:  async () => { await addLine(new Date().toString(), 'out'); },
+  uname: async () => { await addLine('Linux arif-sec-terminal 6.1.0 #1 SMP x86_64 GNU/Linux', 'out'); },
+};
+
+// ── History ──
+const histList = [];
+let histIdx = -1;
+
+// ── Input handler ──
+const input = document.getElementById('cmd-input');
+
+input.addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter') {
+    const raw = input.value.trim();
+    if (!raw) return;
+    histList.unshift(raw);
+    histIdx = -1;
+    input.value = '';
+    await addLine(raw, 'cmd-line');
+    const cmd = raw.toLowerCase().split(' ')[0];
+
+    // AI mode handler
+    if (aiMode) {
+      if (raw.toLowerCase() === 'exit ai') {
+        aiMode = false;
+        document.getElementById('prompt-label').textContent = 'arif@sec:~$';
+        await addLine('  <span style="color:var(--yellow)">[!]</span> Exited AI mode. Back to normal terminal. 👋', 'out');
+      } else {
+        await aiRespond(raw);
+      }
+      await addBlank();
+      return;
+    }
+
+    if (CMDS[cmd]) {
+      await CMDS[cmd]();
+    } else {
+      await addLine(
+        `Command not found: <span style="color:var(--red)">${raw}</span> — type <span style="color:var(--cyan)">help</span> for all commands.`,
+        'err'
+      );
+    }
+    await addBlank();
+  }
+  if (e.key === 'ArrowUp') {
+    histIdx = Math.min(histIdx + 1, histList.length - 1);
+    input.value = histList[histIdx] || '';
+  }
+  if (e.key === 'ArrowDown') {
+    histIdx = Math.max(histIdx - 1, -1);
+    input.value = histIdx === -1 ? '' : histList[histIdx];
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const partial = input.value.toLowerCase();
+    const match = Object.keys(CMDS).find(k => k.startsWith(partial));
+    if (match) input.value = match;
+  }
+});
+
+function runCmd(cmd) {
+  input.value = cmd;
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+}
+
+// Keep focus on input
+document.addEventListener('click', () => { input.focus(); });
+</script>
+</body>
+</html>
